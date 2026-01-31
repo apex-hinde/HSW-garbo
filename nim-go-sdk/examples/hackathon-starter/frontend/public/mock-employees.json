@@ -1,0 +1,86 @@
+[
+  {
+    "first_name": "Kayan",
+    "last_name": "Hyatt",
+    "recipient": "@kayanhyat",
+    "wage": 2500,
+    "department": "Engineering"
+  },
+  {
+    "first_name": "Mia",
+    "last_name": "Chen",
+    "recipient": "@miachen",
+    "wage": 2100,
+    "department": "Engineering"
+  },
+  {
+    "first_name": "Jordan",
+    "last_name": "Singh",
+    "recipient": "@jordansingh",
+    "wage": 3200,
+    "department": "Product"
+  },
+  {
+    "first_name": "Ava",
+    "last_name": "Martinez",
+    "recipient": "@avam",
+    "wage": 1800,
+    "department": "Support"
+  },
+  {
+    "first_name": "Noah",
+    "last_name": "Kim",
+    "recipient": "",
+    "wage": 1950,
+    "department": "Support"
+  },
+  {
+    "first_name": "Sophia",
+    "last_name": "Patel",
+    "recipient": "@sophiap",
+    "wage": "2700.50",
+    "department": "Sales"
+  },
+  {
+    "first_name": "Ethan",
+    "last_name": "Johnson",
+    "recipient": "@ethanj",
+    "wage": 4500,
+    "department": "Executive"
+  },
+  {
+    "first_name": "Liam",
+    "last_name": "Olsen",
+    "recipient": "@liamo",
+    "wage": 2600,
+    "department": "Sales"
+  },
+  {
+    "first_name": "Zoe",
+    "last_name": "Ng",
+    "recipient": "@zoeng",
+    "wage": 1400,
+    "department": "Marketing"
+  },
+  {
+    "first_name": "Olivia",
+    "last_name": "Brown",
+    "recipient": "@oliviab",
+    "wage": 0,
+    "department": "Marketing"
+  },
+  {
+    "first_name": "William",
+    "last_name": "Davis",
+    "recipient": "@sharedrecipient",
+    "wage": 2300,
+    "department": "Operations"
+  },
+  {
+    "first_name": "Emma",
+    "last_name": "Wilson",
+    "recipient": "@sharedrecipient",
+    "wage": 2350,
+    "department": "Operations"
+  }
+]
