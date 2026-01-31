@@ -19,8 +19,14 @@ func TestListEmployees(t *testing.T) {
 	emp1 := &storage.Employee{FirstName: "Alice", LastName: "Smith", Recipient: "@alice", Wage: 75000, Department: "Engineering"}
 	emp2 := &storage.Employee{FirstName: "Bob", LastName: "Jones", Recipient: "@bob", Wage: 80000, Department: "Sales"}
 
-	id1, _ := db.CreateEmployee(emp1)
-	id2, _ := db.CreateEmployee(emp2)
+	id1, err := db.CreateEmployee(emp1)
+	if err != nil {
+		t.Fatalf("failed to create employee fixture: %v", err)
+	}
+	id2, err := db.CreateEmployee(emp2)
+	if err != nil {
+		t.Fatalf("failed to create employee fixture: %v", err)
+	}
 
 	handler := NewHandler(db)
 
@@ -61,7 +67,10 @@ func TestCreateEmployee(t *testing.T) {
 		Department: "Engineering",
 	}
 
-	body, _ := json.Marshal(emp)
+	body, err := json.Marshal(emp)
+	if err != nil {
+		t.Fatalf("failed to marshal employee: %v", err)
+	}
 	req := httptest.NewRequest("POST", "/api/employees", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -94,7 +103,10 @@ func TestGetEmployee(t *testing.T) {
 
 	// Create test data
 	emp := &storage.Employee{FirstName: "Diana", LastName: "Prince", Recipient: "@diana", Wage: 90000, Department: "Management"}
-	id, _ := db.CreateEmployee(emp)
+	id, err := db.CreateEmployee(emp)
+	if err != nil {
+		t.Fatalf("failed to create employee fixture: %v", err)
+	}
 
 	handler := NewHandler(db)
 
@@ -127,7 +139,10 @@ func TestUpdateEmployee(t *testing.T) {
 
 	// Create test data
 	emp := &storage.Employee{FirstName: "Eve", LastName: "Wilson", Recipient: "@eve", Wage: 70000, Department: "HR"}
-	id, _ := db.CreateEmployee(emp)
+	id, err := db.CreateEmployee(emp)
+	if err != nil {
+		t.Fatalf("failed to create employee fixture: %v", err)
+	}
 
 	handler := NewHandler(db)
 
@@ -140,7 +155,10 @@ func TestUpdateEmployee(t *testing.T) {
 		Department: "HR",
 	}
 
-	body, _ := json.Marshal(updated)
+	body, err := json.Marshal(updated)
+	if err != nil {
+		t.Fatalf("failed to marshal updated employee: %v", err)
+	}
 	req := httptest.NewRequest("PUT", "/api/employees/1", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -169,7 +187,10 @@ func TestDeleteEmployee(t *testing.T) {
 
 	// Create test data
 	emp := &storage.Employee{FirstName: "Frank", LastName: "Miller", Recipient: "@frank", Wage: 80000, Department: "Engineering"}
-	id, _ := db.CreateEmployee(emp)
+	id, err := db.CreateEmployee(emp)
+	if err != nil {
+		t.Fatalf("failed to create employee fixture: %v", err)
+	}
 
 	handler := NewHandler(db)
 
@@ -291,7 +312,10 @@ func TestCreateEmployeeInvalidData(t *testing.T) {
 		Department: "Sales",
 	}
 
-	body, _ := json.Marshal(invalidEmp)
+	body, err := json.Marshal(invalidEmp)
+	if err != nil {
+		t.Fatalf("failed to marshal invalid employee: %v", err)
+	}
 	req := httptest.NewRequest("POST", "/api/employees", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
