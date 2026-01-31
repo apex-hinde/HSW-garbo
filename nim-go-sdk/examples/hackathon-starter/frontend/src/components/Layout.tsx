@@ -1,5 +1,5 @@
 import React from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { NimChat } from '@liminalcash/nim-chat'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -7,31 +7,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const apiUrl = import.meta.env.VITE_API_URL || 'https://api.liminal.cash'
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">Liminal Payroll</div>
+    <div className="app">
+      <header className="topnav">
+        <div className="topnav-inner">
+          {/* Brand (icon + "liminal payroll") links to Dashboard */}
+          <Link to="/" className="brandlink" aria-label="Go to dashboard">
+            <img className="brandicon" src="/liminal-mark.svg" alt="" />
+            <span className="brandtext">liminal payroll</span>
+          </Link>
 
-        <nav className="nav">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/employees" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Employees
-          </NavLink>
-          <NavLink to="/run" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Run Payroll
-          </NavLink>
-        </nav>
-      </aside>
+          {/* Only two nav items */}
+          <nav className="topnav-links">
+            <NavLink to="/employees" className={({ isActive }) => `topnav-link ${isActive ? 'active' : ''}`}>
+              Employees
+            </NavLink>
+            <NavLink to="/run" className={({ isActive }) => `topnav-link ${isActive ? 'active' : ''}`}>
+              Run Payroll
+            </NavLink>
+          </nav>
+        </div>
+      </header>
 
-      <div className="content">
-        <header className="topbar">
-          <div className="topbar-title">Company Finance Manager</div>
-          <div className="topbar-subtitle">Manage employees, salaries, and payouts via Liminal</div>
-        </header>
-
-        <div className="page">{children}</div>
-      </div>
+      <main className="page">
+        {children}
+      </main>
 
       <NimChat
         wsUrl={wsUrl}
