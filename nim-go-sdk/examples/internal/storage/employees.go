@@ -21,7 +21,12 @@ func (d *DB) CreateEmployee(emp *Employee) (int64, error) {
 		return 0, fmt.Errorf("error inserting employee: %w", err)
 	}
 
-	return result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("error getting last insert id: %w", err)
+	}
+
+	return id, nil
 }
 
 // GetEmployee retrieves an employee by ID
