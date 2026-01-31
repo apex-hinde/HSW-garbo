@@ -13,12 +13,16 @@ func newTestDB(t *testing.T) *DB {
 	if err != nil {
 		t.Fatalf("NewDB failed: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("Close failed: %v", err)
+		}
+	})
 	return db
 }
 
 func TestEmployeeCRUD(t *testing.T) {
 	db := newTestDB(t)
-	defer db.Close()
 
 	emp := &Employee{
 		FirstName:  "Ada",
@@ -83,3 +87,150 @@ func TestEmployeeCRUD(t *testing.T) {
 	}
 }
 
+func TestEmployeeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		emp     *Employee
+		wantErr bool
+	}{
+		{
+			name: "valid employee",
+			emp: &Employee{
+				FirstName:  "John",
+				LastName:   "Doe",
+				Recipient:  "@john",
+				Wage:       50000,
+				Department: "Sales",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty first name",
+			emp: &Employee{
+				FirstName:  "",
+				LastName:   "Doe",
+				Recipient:  "@john",
+				Wage:       50000,
+				Department: "Sales",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty last name",
+			emp: &Employee{
+				FirstName:  "John",
+				LastName:   "",
+				Recipient:  "@john",
+				Wage:       50000,
+				Department: "Sales",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty recipient",
+			emp: &Employee{
+				FirstName:  "John",
+				LastName:   "Doe",
+				Recipient:  "",
+				Wage:       50000,
+				Department: "Sales",
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative wage",
+			emp: &Employee{
+				FirstName:  "John",
+				LastName:   "Doe",
+				Recipient:  "@john",
+				Wage:       -100,
+				Department: "Sales",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty department",
+			emp: &Employee{
+				FirstName:  "John",
+				LastName:   "Doe",
+				Recipient:  "@john",
+				Wage:       50000,
+				Department: "",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.emp.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetEmployeeInvalidID(t *testing.T) {
+	db := newTestDB(t)
+
+	_, err := db.GetEmployee(0)
+	if err == nil {
+		t.Fatalf("GetEmployee expected error for invalid id")
+	}
+
+	_, err = db.GetEmployee(-1)
+	if err == nil {
+		t.Fatalf("GetEmployee expected error for negative id")
+	}
+}
+
+func TestDeleteEmployeeInvalidID(t *testing.T) {
+	db := newTestDB(t)
+
+	err := db.DeleteEmployee(0)
+	if err == nil {
+		t.Fatalf("DeleteEmployee expected error for invalid id")
+	}
+}
+
+func TestGetEmployeesByDepartment(t *testing.T) {
+	db := newTestDB(t)
+
+	// Create multiple employees in different departments
+	emps := []*Employee{
+		{FirstName: "Alice", LastName: "Smith", Recipient: "@alice", Wage: 80000, Department: "Engineering"},
+		{FirstName: "Bob", LastName: "Jones", Recipient: "@bob", Wage: 70000, Department: "Engineering"},
+		{FirstName: "Charlie", LastName: "Brown", Recipient: "@charlie", Wage: 60000, Department: "Sales"},
+	}
+
+	for _, emp := range emps {
+		_, err := db.CreateEmployee(emp)
+		if err != nil {
+			t.Fatalf("CreateEmployee failed: %v", err)
+		}
+	}
+
+	// Get employees by department
+	engEmployees, err := db.GetEmployeesByDepartment("Engineering")
+	if err != nil {
+		t.Fatalf("GetEmployeesByDepartment failed: %v", err)
+	}
+	if len(engEmployees) != 2 {
+		t.Fatalf("GetEmployeesByDepartment expected 2, got %d", len(engEmployees))
+	}
+
+	salesEmployees, err := db.GetEmployeesByDepartment("Sales")
+	if err != nil {
+		t.Fatalf("GetEmployeesByDepartment failed: %v", err)
+	}
+	if len(salesEmployees) != 1 {
+		t.Fatalf("GetEmployeesByDepartment expected 1, got %d", len(salesEmployees))
+	}
+
+	// Test with empty department
+	_, err = db.GetEmployeesByDepartment("")
+	if err == nil {
+		t.Fatalf("GetEmployeesByDepartment expected error for empty department")
+	}
+}
