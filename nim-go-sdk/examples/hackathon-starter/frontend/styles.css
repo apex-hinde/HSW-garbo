@@ -1,148 +1,87 @@
-@font-face {
-  font-family: 'ABC Marist';
-  src: url('/fonts/abc-marist/ABCMarist-Regular.otf') format('opentype');
-  font-weight: 400;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'ABC Marist';
-  src: url('/fonts/abc-marist/ABCMarist-Medium.otf') format('opentype');
-  font-weight: 500;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'Helvetica Monospaced Pro';
-  src: url('/fonts/helvetica-monospaced-pro/HelveticaMonospacedPro-Rg.otf') format('opentype');
-  font-weight: 400;
-  font-style: normal;
-}
-
-:root {
-  --cream: #F1EDE7;
-  --black: #231F18;
-  --orange: #FF6D00;
-  --brown: #492610;
-  --blue: #9BC1F3;
-  --beige: #9E8C78;
-  --white: #FFFFFF;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Helvetica Monospaced Pro', 'SF Mono', Monaco, monospace;
-  background: var(--cream);
-  color: var(--black);
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
   min-height: 100vh;
-  padding: 3rem 2rem;
-  -webkit-font-smoothing: antialiased;
 }
 
-#root {
-  max-width: 720px;
-  margin: 0 auto;
-  position: relative;
-  min-height: calc(100vh - 6rem);
+.sidebar {
+  padding: 16px;
+  border-right: 1px solid rgba(255,255,255,0.1);
 }
 
-h1 {
-  font-family: 'ABC Marist', sans-serif;
-  font-weight: 500;
-  font-size: clamp(2.5rem, 8vw, 4rem);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  margin-bottom: 3rem;
+.brand {
+  font-weight: 700;
+  margin-bottom: 16px;
 }
 
-ol {
-  list-style: none;
-  counter-reset: step-counter;
+.nav {
+  display: grid;
+  gap: 8px;
+}
+.nav a {
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  opacity: 0.85;
+}
+.nav a.active {
+  opacity: 1;
+  background: rgba(255,255,255,0.08);
 }
 
-ol li {
-  counter-increment: step-counter;
-  margin-bottom: 2rem;
-  padding-left: 2.5rem;
-  position: relative;
-  font-size: 0.9375rem;
-  line-height: 1.6;
-  color: var(--brown);
+.content { padding: 20px; }
+.topbar { margin-bottom: 16px; }
+.topbar-title { font-size: 20px; font-weight: 700; }
+.topbar-subtitle { opacity: 0.8; }
+
+.page { max-width: 1100px; }
+
+.card {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
-ol li::before {
-  content: counter(step-counter) ".";
-  position: absolute;
-  left: 0;
-  font-family: 'ABC Marist', sans-serif;
-  font-weight: 500;
-  color: var(--black);
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
-a {
-  color: var(--blue);
-  text-decoration: underline;
-  text-decoration-color: var(--blue);
-  transition: color 0.2s, text-decoration-color 0.2s;
+.stack { display: grid; gap: 16px; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr 120px 120px;
+  gap: 10px;
+  align-items: center;
 }
 
-a:hover {
-  color: var(--orange);
-  text-decoration-color: var(--orange);
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+.big { font-size: 28px; font-weight: 800; margin: 8px 0 12px; }
+
+.error { color: #ffb3b3; }
+.hint { opacity: 0.8; font-size: 12px; }
+
+.check { display: flex; gap: 10px; align-items: center; }
+
+button {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
+  cursor: pointer;
 }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+button.danger { border-color: rgba(255,0,0,0.25); }
 
-code {
-  background: var(--white);
-  border: 1px solid rgba(158, 140, 120, 0.3);
-  border-radius: 4px;
-  padding: 0.125rem 0.375rem;
-  font-family: 'Helvetica Monospaced Pro', monospace;
-  font-size: 0.875rem;
-  color: var(--black);
-}
-
-.code-block {
-  background: var(--white);
-  border: 1px solid rgba(158, 140, 120, 0.3);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  margin: 1rem 0;
-  font-family: 'Helvetica Monospaced Pro', monospace;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--black);
-  overflow-x: auto;
-}
-
-.nim-credit {
-  position: fixed;
-  bottom: 2rem;
-  left: 2rem;
-  font-size: 0.75rem;
-  color: var(--beige);
-  font-family: 'ABC Marist', sans-serif;
-}
-
-@media (max-width: 640px) {
-  body {
-    padding: 2rem 1.5rem;
-  }
-
-  h1 {
-    margin-bottom: 2rem;
-  }
-
-  ol li {
-    padding-left: 2rem;
-  }
-
-  .nim-credit {
-    position: static;
-    margin-top: 4rem;
-  }
+input, select {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  color: inherit;
 }

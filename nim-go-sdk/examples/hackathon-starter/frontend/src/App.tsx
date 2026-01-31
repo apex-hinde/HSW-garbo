@@ -1,0 +1,17 @@
+import { Routes, Route } from 'react-router-dom'
+import Layout from './components/Layout'
+import Dashboard from './pages/Dashboard'
+import Employees from './pages/Employees'
+import RunPayroll from './pages/RunPayroll'
+
+export default function App() {
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/employees" element={<Employees />} />
+        <Route path="/run" element={<RunPayroll />} />
+      </Routes>
+    </Layout>
+  )
+}
