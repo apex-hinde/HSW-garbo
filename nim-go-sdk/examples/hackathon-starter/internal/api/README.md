@@ -119,6 +119,58 @@ Filters employees by their department name.
 
 ---
 
+## Example Usage with curl
+
+Assuming the server is running on `localhost:8080`:
+
+### List all employees
+```bash
+curl http://localhost:8080/api/employees
+```
+
+### Create a new employee
+```bash
+curl -X POST http://localhost:8080/api/employees \
+  -H "Content-Type: application/json" \
+  -d '{
+    "FirstName": "Alice",
+    "LastName": "Smith",
+    "Recipient": "@alice",
+    "Wage": 75000,
+    "Department": "Engineering"
+  }'
+```
+
+### Get employee by ID
+```bash
+curl http://localhost:8080/api/employees/1
+```
+
+### Update an employee
+```bash
+curl -X PUT http://localhost:8080/api/employees/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "FirstName": "Alice",
+    "LastName": "Smith",
+    "Recipient": "@alice",
+    "Wage": 80000,
+    "Department": "Engineering"
+  }'
+```
+
+### Delete an employee
+```bash
+curl -X DELETE http://localhost:8080/api/employees/1
+```
+
+### List employees by department
+```bash
+curl http://localhost:8080/api/employees/department/Engineering
+```
+
+---
+
 ## Error Handling
 In case of an error, the API returns a relevant HTTP status code and a JSON body:
 
