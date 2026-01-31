@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/becomeliminal/nim-go-sdk/core"
+	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/api"
+	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
 	"github.com/becomeliminal/nim-go-sdk/executor"
 	"github.com/becomeliminal/nim-go-sdk/server"
 	"github.com/becomeliminal/nim-go-sdk/tools"
@@ -42,6 +45,11 @@ func main() {
 		port = "8080"
 	}
 
+	employeesDBPath := os.Getenv("EMPLOYEES_DB_PATH")
+	if employeesDBPath == "" {
+		employeesDBPath = "employees.db"
+	}
+
 	// ============================================================================
 	// LIMINAL EXECUTOR SETUP
 	// ============================================================================
@@ -53,6 +61,22 @@ func main() {
 		BaseURL: liminalBaseURL,
 	})
 	log.Println("✅ Liminal API configured")
+
+	// ============================================================================
+	// EMPLOYEE DATABASE SETUP
+	// ============================================================================
+	// Local SQLite database for employee directory tools
+
+	db, err := storage.NewDB(employeesDBPath)
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize employee database: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("⚠️ Failed to close employee database: %v", err)
+		}
+	}()
+	log.Println("✅ Employee database configured")
 
 	// ============================================================================
 	// SERVER SETUP
@@ -103,6 +127,10 @@ func main() {
 	srv.AddTool(createSpendingAnalyzerTool(liminalExecutor))
 	log.Println("✅ Added custom spending analyzer tool")
 
+	// Employee management tools (CRUD + department lookup)
+	srv.AddTools(createEmployeeTools(db)...)
+	log.Println("✅ Added employee management tools")
+
 	// TODO: Add more custom tools here!
 	// Examples:
 	//   - Savings goal tracker
@@ -110,6 +138,26 @@ func main() {
 	//   - Spending category analyzer
 	//   - Bill payment predictor
 	//   - Cash flow forecaster
+
+	// ============================================================================
+	// REST API SETUP
+	// ============================================================================
+	// Create HTTP mux for REST API endpoints
+	mux := http.NewServeMux()
+
+	// Register employee API routes
+	apiHandler := api.NewHandler(db)
+	apiHandler.RegisterRoutes(mux)
+	log.Println("✅ Added REST API endpoints for employees")
+
+	// Register WebSocket handler from nim-go-sdk server
+	mux.HandleFunc("/ws", srv.HandleWebSocket)
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
 
 	// ============================================================================
 	// START SERVER
@@ -120,11 +168,18 @@ func main() {
 	log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	log.Printf("📡 WebSocket endpoint: ws://localhost:%s/ws", port)
 	log.Printf("💚 Health check: http://localhost:%s/health", port)
+	log.Printf("🔌 REST API: http://localhost:%s/api/employees", port)
 	log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	log.Println("Ready for connections! Start your frontend with: cd frontend && npm run dev")
 	log.Println()
 
-	if err := srv.Run(":" + port); err != nil {
+	// Start HTTP server with custom mux
+	httpServer := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+	}
+
+	if err := httpServer.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -175,6 +230,14 @@ AVAILABLE BANKING TOOLS:
 
 CUSTOM ANALYTICAL TOOLS:
 - Analyze spending patterns (analyze_spending)
+
+EMPLOYEE DIRECTORY TOOLS:
+- Add employee (create_employee)
+- Get employee by id (get_employee)
+- List employees (list_employees)
+- Update employee (update_employee)
+- Delete employee (delete_employee)
+- List employees by department (list_employees_by_department)
 
 TIPS FOR GREAT INTERACTIONS:
 - Proactively suggest relevant actions ("Want me to move some to savings?")
@@ -278,6 +341,201 @@ func createSpendingAnalyzerTool(liminalExecutor core.ToolExecutor) core.Tool {
 				Data:    result,
 			}, nil
 		}).
+		Build()
+}
+
+// ============================================================================
+// EMPLOYEE DIRECTORY TOOLS
+// ============================================================================
+
+func createEmployeeTools(db *storage.DB) []core.Tool {
+	return []core.Tool{
+		createEmployeeTool(db),
+		getEmployeeTool(db),
+		listEmployeesTool(db),
+		updateEmployeeTool(db),
+		deleteEmployeeTool(db),
+		listEmployeesByDepartmentTool(db),
+	}
+}
+
+func createEmployeeTool(db *storage.DB) core.Tool {
+	handler := func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		var params struct {
+			FirstName  string  `json:"first_name"`
+			LastName   string  `json:"last_name"`
+			Recipient  string  `json:"recipient"`
+			Wage       float64 `json:"wage"`
+			Department string  `json:"department"`
+		}
+		if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+			return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+		}
+
+		emp := &storage.Employee{
+			FirstName:  params.FirstName,
+			LastName:   params.LastName,
+			Recipient:  params.Recipient,
+			Wage:       params.Wage,
+			Department: params.Department,
+		}
+
+		id, err := db.CreateEmployee(emp)
+		if err != nil {
+			return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		}
+
+		emp.ID = int(id)
+		return &core.ToolResult{Success: true, Data: emp}, nil
+	}
+
+	return tools.New("create_employee").
+		Description("Create a new employee record in the local employee directory.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"first_name": tools.StringProperty("Employee first name"),
+			"last_name":  tools.StringProperty("Employee last name"),
+			"recipient":  tools.StringProperty("Employee recipient handle, e.g. @ada"),
+			"wage":       tools.NumberProperty("Employee wage (non-negative)"),
+			"department": tools.StringProperty("Employee department"),
+		})).
+		Handler(handler).
+		Build()
+}
+
+func getEmployeeTool(db *storage.DB) core.Tool {
+	handler := func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		var params struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+			return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+		}
+
+		emp, err := db.GetEmployee(params.ID)
+		if err != nil {
+			return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		}
+
+		return &core.ToolResult{Success: true, Data: emp}, nil
+	}
+
+	return tools.New("get_employee").
+		Description("Get an employee record by id.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"id": tools.IntegerProperty("Employee id"),
+		})).
+		Handler(handler).
+		Build()
+}
+
+func listEmployeesTool(db *storage.DB) core.Tool {
+	handler := func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		emps, err := db.ListEmployees()
+		if err != nil {
+			return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		}
+		return &core.ToolResult{Success: true, Data: map[string]interface{}{"employees": emps, "count": len(emps)}}, nil
+	}
+
+	return tools.New("list_employees").
+		Description("List all employees in the directory.").
+		Schema(tools.ObjectSchema(map[string]interface{}{})).
+		Handler(handler).
+		Build()
+}
+
+func updateEmployeeTool(db *storage.DB) core.Tool {
+	handler := func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		var params struct {
+			ID         int     `json:"id"`
+			FirstName  string  `json:"first_name"`
+			LastName   string  `json:"last_name"`
+			Recipient  string  `json:"recipient"`
+			Wage       float64 `json:"wage"`
+			Department string  `json:"department"`
+		}
+		if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+			return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+		}
+
+		emp := &storage.Employee{
+			ID:         params.ID,
+			FirstName:  params.FirstName,
+			LastName:   params.LastName,
+			Recipient:  params.Recipient,
+			Wage:       params.Wage,
+			Department: params.Department,
+		}
+
+		if err := db.UpdateEmployee(emp); err != nil {
+			return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		}
+
+		return &core.ToolResult{Success: true, Data: emp}, nil
+	}
+
+	return tools.New("update_employee").
+		Description("Update an existing employee record by id.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"id":         tools.IntegerProperty("Employee id"),
+			"first_name": tools.StringProperty("Employee first name"),
+			"last_name":  tools.StringProperty("Employee last name"),
+			"recipient":  tools.StringProperty("Employee recipient handle, e.g. @ada"),
+			"wage":       tools.NumberProperty("Employee wage (non-negative)"),
+			"department": tools.StringProperty("Employee department"),
+		})).
+		Handler(handler).
+		Build()
+}
+
+func deleteEmployeeTool(db *storage.DB) core.Tool {
+	handler := func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		var params struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+			return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+		}
+
+		if err := db.DeleteEmployee(params.ID); err != nil {
+			return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		}
+
+		return &core.ToolResult{Success: true, Data: map[string]interface{}{"deleted": true, "id": params.ID}}, nil
+	}
+
+	return tools.New("delete_employee").
+		Description("Delete an employee record by id.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"id": tools.IntegerProperty("Employee id"),
+		})).
+		Handler(handler).
+		Build()
+}
+
+func listEmployeesByDepartmentTool(db *storage.DB) core.Tool {
+	handler := func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		var params struct {
+			Department string `json:"department"`
+		}
+		if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+			return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+		}
+
+		emps, err := db.GetEmployeesByDepartment(params.Department)
+		if err != nil {
+			return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		}
+
+		return &core.ToolResult{Success: true, Data: map[string]interface{}{"employees": emps, "count": len(emps), "department": params.Department}}, nil
+	}
+
+	return tools.New("list_employees_by_department").
+		Description("List employees in a specific department.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"department": tools.StringProperty("Department name"),
+		})).
+		Handler(handler).
 		Build()
 }
 
