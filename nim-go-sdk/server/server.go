@@ -171,7 +171,7 @@ func (s *Server) ToolCount() int {
 
 // Handler returns an HTTP handler for WebSocket connections.
 func (s *Server) Handler() http.Handler {
-	return http.HandlerFunc(s.handleWebSocket)
+	return http.HandlerFunc(s.HandleWebSocket)
 }
 
 // Run starts the server on the given address.
@@ -209,7 +209,7 @@ func (s *Server) defaultLiminalAuthFunc() func(r *http.Request) (string, error) 
 	}
 }
 
-func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Authenticate
 	userID := "default-user"
 	authFunc := s.config.AuthFunc
