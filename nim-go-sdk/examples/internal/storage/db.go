@@ -1,0 +1,49 @@
+package storage
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+type DB struct {
+	conn *sql.DB
+}
+
+func NewDB(path string) (*DB, error) {
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, fmt.Errorf("error opening database: %w", err)
+	}
+
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("error pinging database: %w", err)
+	}
+
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+
+	query := `
+	CREATE TABLE IF NOT EXISTS employees (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		first_name TEXT NOT NULL,
+		last_name TEXT NOT NULL,
+		recipient TEXT UNIQUE NOT NULL,
+		wage REAL,
+		department TEXT
+	);`
+
+	if _, err := db.Exec(query); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("error creating employees table: %w", err)
+	}
+
+	return &DB{conn: db}, nil
+}
+
+func (d *DB) Close() error {
+	return d.conn.Close()
+}
