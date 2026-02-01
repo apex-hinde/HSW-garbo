@@ -1,6 +1,8 @@
 # Environment variables
 .env
 .env.local
+.env.example
+*.db
 
 # Go build artifacts
 *.exe
