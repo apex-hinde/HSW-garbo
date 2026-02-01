@@ -247,7 +247,7 @@ export default function Dashboard() {
   if (employeesQuery.isLoading) return <p>Loading dashboard…</p>
   if (employeesQuery.error) return <p className="error">Failed: {employeesQuery.error.message}</p>
 
-  const pieColors = ['#ff7a00', '#ffb266', '#ffd7b0', '#ff9b33', '#ff8a1a', '#ffa858']
+  const pieColors = ['#ff7a00', '#1d6e00', '#000000', '#7c0059', '#8c0200', '#000d80', '#00a2a7']
 
   return (
     <div className="dash">
