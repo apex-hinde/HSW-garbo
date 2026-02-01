@@ -7,14 +7,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
-	"time"
-	"strings"
 	"slices"
-	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/becomeliminal/nim-go-sdk/core"
 	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/api"
+	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
 	"github.com/becomeliminal/nim-go-sdk/executor"
 	"github.com/becomeliminal/nim-go-sdk/server"
 	"github.com/becomeliminal/nim-go-sdk/tools"
@@ -50,9 +53,6 @@ func main() {
 	if employeesDBPath == "" {
 		employeesDBPath = "employees.db"
 	}
-
-	
-
 
 	// ============================================================================
 	// LIMINAL EXECUTOR SETUP
@@ -139,6 +139,9 @@ func main() {
 	srv.AddTools(createEmployeeTools(db)...)
 	log.Println("✅ Added employee management tools")
 
+	srv.AddTool(cashFlowAnalysisTool())
+	srv.AddTool(analyseCashFlow(transactions, days))
+	log.Println("✅ Added custom cash flow insight and projection tool")
 
 	// TODO: Add more custom tools here!
 	// Examples:
@@ -269,152 +272,150 @@ Remember: You're here to make banking delightful and help users build better fin
 // Use this as a template for your own hackathon tools!
 func countEmployeeCount(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
 	return tools.New("count_employees").
-	Description("counts the total number of employees").
-	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
-	L, e := (db).ListEmployees()
-	if e != nil {
-		log.Fatal()
-	}
-	
-	result := map[string]interface{}{
-		"employee count": len(L),
-	}
+		Description("counts the total number of employees").
+		Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+			L, e := (db).ListEmployees()
+			if e != nil {
+				log.Fatal()
+			}
 
-	return &core.ToolResult{
-		Success: true,
-		Data:    result,
-	}, nil	
-	}).
-	Build()
+			result := map[string]interface{}{
+				"employee count": len(L),
+			}
+
+			return &core.ToolResult{
+				Success: true,
+				Data:    result,
+			}, nil
+		}).
+		Build()
 }
 func doPayroll(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
 	return tools.New("fulfill_remaining_payroll").
-	Description("does the payroll for all employees").
-	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
-	txRequest := map[string]interface{}{
-		"limit": 100, // Get up to 100 transactions
-	}
+		Description("does the payroll for all employees").
+		Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+			txRequest := map[string]interface{}{
+				"limit": 100, // Get up to 100 transactions
+			}
 
-	txRequestJSON, _ := json.Marshal(txRequest)
-	txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
-		UserID:    toolParams.UserID,
-		Tool:      "get_transactions",
-		Input:     txRequestJSON,
-		RequestID: toolParams.RequestID,
-	})
-	if err != nil {
-		return &core.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
-		}, nil
-	}
-	if !txResponse.Success {
-		return &core.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
-		}, nil
-	}
-	var transactions []map[string]interface{}
-	var txData map[string]interface{}
-	if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
-		if txArray, ok := txData["transactions"].([]interface{}); ok {
-			for _, tx := range txArray {
-				if txMap, ok := tx.(map[string]interface{}); ok {
-					transactions = append(transactions, txMap)
+			txRequestJSON, _ := json.Marshal(txRequest)
+			txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+				UserID:    toolParams.UserID,
+				Tool:      "get_transactions",
+				Input:     txRequestJSON,
+				RequestID: toolParams.RequestID,
+			})
+			if err != nil {
+				return &core.ToolResult{
+					Success: false,
+					Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
+				}, nil
+			}
+			if !txResponse.Success {
+				return &core.ToolResult{
+					Success: false,
+					Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
+				}, nil
+			}
+			var transactions []map[string]interface{}
+			var txData map[string]interface{}
+			if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+				if txArray, ok := txData["transactions"].([]interface{}); ok {
+					for _, tx := range txArray {
+						if txMap, ok := tx.(map[string]interface{}); ok {
+							transactions = append(transactions, txMap)
+						}
+					}
 				}
 			}
-		}
-	}
-	newTransactions := removeOld(transactions)
-	peopleWhoNeedToBePaid := checkPayments(newTransactions, db)
+			newTransactions := removeOld(transactions)
+			peopleWhoNeedToBePaid := checkPayments(newTransactions, db)
 
+			L, e := (db).ListEmployees()
+			if e != nil {
+				log.Fatal()
+			}
+			paymentRequests := []map[string]interface{}{}
+			for _, v := range L {
+				if slices.Contains(peopleWhoNeedToBePaid, v.Recipient) {
 
+					payRequest := map[string]interface{}{
+						"recipient": v.Recipient,
+						"amount":    v.Wage,
+						"currency":  "USD",
+						"note":      v.Recipient + " payroll",
+					}
+					paymentRequests = append(paymentRequests, payRequest)
 
-	L, e := (db).ListEmployees()
-	if e != nil {
-		log.Fatal()
-	}
-	paymentRequests := []map[string]interface{}{}
-	for _, v := range L{
-		if slices.Contains(peopleWhoNeedToBePaid, v.Recipient) {
- 
-		payRequest := map[string]interface{}{
-			"recipient": v.Recipient,
-			"amount": v.Wage,
-			"currency": "USD",
-			"note": v.Recipient + " payroll",
-		}
-		paymentRequests = append(paymentRequests, payRequest)
+				}
+			}
+			result := map[string]interface{}{
+				"payment requests": paymentRequests,
+			}
+			log.Println(result)
 
-	}
-	}
-	result := map[string]interface{}{
-		"payment requests": paymentRequests,
-	}
-	log.Println(result)
-
-	return &core.ToolResult{
-		Success: true,
-		Data: result,
-	}, nil
-	}).Build()
+			return &core.ToolResult{
+				Success: true,
+				Data:    result,
+			}, nil
+		}).Build()
 }
 func isPayrollDone(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
 	return tools.New("payroll_check").
-	Description("checks if all payroll is done").
-	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		Description("checks if all payroll is done").
+		Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
 
-	txRequest := map[string]interface{}{
-		"limit": 100, // Get up to 100 transactions
-	}
+			txRequest := map[string]interface{}{
+				"limit": 100, // Get up to 100 transactions
+			}
 
-	txRequestJSON, _ := json.Marshal(txRequest)
-	txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
-		UserID:    toolParams.UserID,
-		Tool:      "get_transactions",
-		Input:     txRequestJSON,
-		RequestID: toolParams.RequestID,
-	})
-	if err != nil {
-		return &core.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
-		}, nil
-	}
-	if !txResponse.Success {
-		return &core.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
-		}, nil
-	}
-	var transactions []map[string]interface{}
-	var txData map[string]interface{}
-	if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
-		if txArray, ok := txData["transactions"].([]interface{}); ok {
-			for _, tx := range txArray {
-				if txMap, ok := tx.(map[string]interface{}); ok {
-					transactions = append(transactions, txMap)
+			txRequestJSON, _ := json.Marshal(txRequest)
+			txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+				UserID:    toolParams.UserID,
+				Tool:      "get_transactions",
+				Input:     txRequestJSON,
+				RequestID: toolParams.RequestID,
+			})
+			if err != nil {
+				return &core.ToolResult{
+					Success: false,
+					Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
+				}, nil
+			}
+			if !txResponse.Success {
+				return &core.ToolResult{
+					Success: false,
+					Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
+				}, nil
+			}
+			var transactions []map[string]interface{}
+			var txData map[string]interface{}
+			if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+				if txArray, ok := txData["transactions"].([]interface{}); ok {
+					for _, tx := range txArray {
+						if txMap, ok := tx.(map[string]interface{}); ok {
+							transactions = append(transactions, txMap)
+						}
+					}
 				}
 			}
-		}
-	}
-	newTransactions := removeOld(transactions)
-	answer := checkPayments(newTransactions, db)
-	result := map[string]interface{}{
-		"people who have not been paid": answer,
-	}
-	return &core.ToolResult{
-		Success: true,
-		Data: result,
-	}, nil
-		
-	}).Build()
+			newTransactions := removeOld(transactions)
+			answer := checkPayments(newTransactions, db)
+			result := map[string]interface{}{
+				"people who have not been paid": answer,
+			}
+			return &core.ToolResult{
+				Success: true,
+				Data:    result,
+			}, nil
+
+		}).Build()
 
 }
 func removeOld(transactions []map[string]interface{}) []map[string]interface{} {
 
 	var newTransactions []map[string]interface{}
-	for _, v := range transactions{
+	for _, v := range transactions {
 		log.Println(v["createdAt"])
 		var timeString string = v["createdAt"].(string)
 		var time, e = time.Parse(time.RFC3339, timeString)
@@ -422,8 +423,8 @@ func removeOld(transactions []map[string]interface{}) []map[string]interface{} {
 			log.Println("time not formated correctly")
 		}
 		log.Println("time:", time)
-		log.Println((time).After(time.Local().AddDate(0,0,-14)))
-		if (time).After(time.Local().AddDate(0,0,-14)) {
+		log.Println((time).After(time.Local().AddDate(0, 0, -14)))
+		if (time).After(time.Local().AddDate(0, 0, -14)) {
 			newTransactions = append(newTransactions, v)
 		}
 
@@ -431,18 +432,18 @@ func removeOld(transactions []map[string]interface{}) []map[string]interface{} {
 	return newTransactions
 }
 
-func checkPayments(transactions []map[string]interface{}, db storage.DB) []string{
+func checkPayments(transactions []map[string]interface{}, db storage.DB) []string {
 	var acc []string
 	var notes []string
 	log.Println("transactions length:", len(transactions))
 
-	for _, v := range transactions{
+	for _, v := range transactions {
 		var note string = v["note"].(string)
 		log.Println("note:", note)
 		words := strings.Fields(note)
 		if len(words) == 2 {
-		var word string = words[0]
-		notes = append(notes, word)
+			var word string = words[0]
+			notes = append(notes, word)
 		}
 	}
 
@@ -450,7 +451,7 @@ func checkPayments(transactions []map[string]interface{}, db storage.DB) []strin
 	if e != nil {
 		log.Fatal()
 	}
-	for _, valueFromDb := range L{
+	for _, valueFromDb := range L {
 
 		var recipient string = valueFromDb.Recipient
 		if !slices.Contains(notes, recipient) {
@@ -460,8 +461,6 @@ func checkPayments(transactions []map[string]interface{}, db storage.DB) []strin
 	}
 	return acc
 }
-
-
 
 // ============================================================================
 // EMPLOYEE DIRECTORY TOOLS
@@ -658,6 +657,422 @@ func listEmployeesByDepartmentTool(db *storage.DB) core.Tool {
 		Build()
 }
 
+func cashFlowAnalysisTool() core.Tool {
+	//Use analyseCashFlow somewhere
+}
+
+// OLSModel represents a simple linear regression model
+type OLSModel struct {
+	Weight float64
+	Bias   float64
+}
+
+type DayData struct {
+	DayNumber int
+	Date      time.Time
+	Amount    float64
+	Count     int
+}
+
+// Fit trains the model using analytical OLS solution
+// β = (X^T X)^(-1) X^T y
+func (m *OLSModel) Fit(X, y []float64) error {
+	if len(X) != len(y) {
+		return fmt.Errorf("X and y must have the same length")
+	}
+
+	n := float64(len(X))
+	if n == 0 {
+		return fmt.Errorf("need at least one data point")
+	}
+
+	// Calculate means
+	var sumX, sumY, sumXY, sumX2 float64
+	for i := 0; i < len(X); i++ {
+		sumX += X[i]
+		sumY += y[i]
+		sumXY += X[i] * y[i]
+		sumX2 += X[i] * X[i]
+	}
+
+	// Analytical OLS solution
+	// weight = (n*Σ(xy) - Σx*Σy) / (n*Σ(x²) - (Σx)²)
+	// bias = (Σy - weight*Σx) / n
+	denominator := n*sumX2 - sumX*sumX
+	if math.Abs(denominator) < 1e-10 {
+		return fmt.Errorf("cannot fit model: data is too uniform")
+	}
+
+	m.Weight = (n*sumXY - sumX*sumY) / denominator
+	m.Bias = (sumY - m.Weight*sumX) / n
+
+	return nil
+}
+
+// Predict makes a single prediction
+func (m *OLSModel) Predict(x float64) float64 {
+	return m.Weight*x + m.Bias
+}
+
+// PredictBatch makes batch predictions
+func (m *OLSModel) PredictBatch(x []float64) []float64 {
+	predictions := make([]float64, len(x))
+	for i, val := range x {
+		predictions[i] = m.Predict(val)
+	}
+	return predictions
+}
+
+// CalculateR2 calculates R-squared score
+func (m *OLSModel) CalculateR2(X, y []float64) float64 {
+	predictions := m.PredictBatch(X)
+
+	// Calculate mean of y
+	var sumY float64
+	for _, val := range y {
+		sumY += val
+	}
+	meanY := sumY / float64(len(y))
+
+	// Calculate SS_res and SS_tot
+	var ssRes, ssTot float64
+	for i := 0; i < len(y); i++ {
+		ssRes += math.Pow(y[i]-predictions[i], 2)
+		ssTot += math.Pow(y[i]-meanY, 2)
+	}
+
+	if ssTot == 0 {
+		return 0
+	}
+
+	return 1 - (ssRes / ssTot)
+}
+
+// CalculateMSE calculates Mean Squared Error
+func (m *OLSModel) CalculateMSE(X, y []float64) float64 {
+	predictions := m.PredictBatch(X)
+
+	var sumSquaredError float64
+	for i := 0; i < len(y); i++ {
+		error := y[i] - predictions[i]
+		sumSquaredError += error * error
+	}
+
+	return sumSquaredError / float64(len(y))
+}
+
+// Split regressions every 30 days, to display variation in trends over the course of months
+func MonthSlicer(days []DayData, income []float64) []OLSModel {
+	if len(days) == 0 {
+		return []OLSModel{}
+	}
+
+	window := 30
+	regs := make([]OLSModel, 0, len(days)/window+1)
+
+	// start represents the earliest day selected, or of the 30-day window
+	// as such, it increments by the window size (+30)
+	for start := 0; start < len(days); start += window {
+		end := start + window
+		if end > len(days) {
+			end = len(days)
+		}
+
+		// Build X and y for this window
+		size := end - start
+		X := make([]float64, size)
+		y := make([]float64, size)
+
+		for i := 0; i < size; i++ {
+			X[i] = float64(days[start+i].DayNumber)
+			y[i] = income[start+i]
+		}
+
+		// Create an OLS regression for this time frame
+		model := OLSModel{}
+		err := model.Fit(X, y)
+		if err == nil {
+			regs = append(regs, model)
+		}
+	}
+
+	return regs
+}
+
+// Takes an array of OLS regressions and calculates a weighted average of the weights, and normal average of the bias to project fo the next 30 days
+func ProjectCashFlow(regs []OLSModel, weighted bool) OLSModel {
+	if len(regs) == 1 {
+		return regs[0]
+	}
+
+	var sumW float64
+	var sumB float64
+	var sumWeights float64
+
+	for i := 0; i < len(regs); i++ {
+		w := regs[i].Weight
+		b := regs[i].Bias
+
+		if weighted {
+			// weight factor increases with the recency of the time slice
+			factor := float64(1+i) / float64(len(regs))
+			sumW += w * factor
+			sumWeights += factor
+		} else {
+			sumW += w
+			sumWeights += 1
+		}
+
+		sumB += b
+	}
+
+	avgW := sumW / sumWeights
+	avgB := sumB / float64(len(regs))
+
+	projection := OLSModel{Weight: avgW, Bias: avgB}
+
+	return projection
+}
+
+// analyseCashFlow processes transaction data and returns insights
+func analyseCashFlow(transactions []map[string]interface{}, days int) map[string]interface{} {
+	// Handle edge cases
+	if len(transactions) == 0 {
+		return map[string]interface{}{
+			"error": "no transactions provided",
+		}
+	}
+
+	if days <= 0 {
+		days = 7 // Default to 7 days prediction
+	}
+
+	// ========================================================================
+	// STEP 1: Parse and aggregate transaction data by day
+	// ========================================================================
+
+	dayMap := make(map[string]*DayData)
+	var minDate time.Time
+
+	for i, txn := range transactions {
+		// Extract date (support multiple formats)
+		var txnDate time.Time
+		var err error
+
+		if dateStr, ok := txn["date"].(string); ok {
+			// Try multiple date formats
+			formats := []string{
+				"2006-01-02",
+				"2006-01-02T15:04:05Z",
+				"2006-01-02 15:04:05",
+				time.RFC3339,
+			}
+
+			for _, format := range formats {
+				txnDate, err = time.Parse(format, dateStr)
+				if err == nil {
+					break
+				}
+			}
+
+			if err != nil {
+				log.Printf("Warning: could not parse date for transaction %d: %v", i, dateStr)
+				continue
+			}
+		} else if dateTime, ok := txn["date"].(time.Time); ok {
+			txnDate = dateTime
+		} else {
+			log.Printf("Warning: transaction %d has invalid date format", i)
+			continue
+		}
+
+		// Extract amount
+		var amount float64
+		switch v := txn["amount"].(type) {
+		case float64:
+			amount = v
+		case float32:
+			amount = float64(v)
+		case int:
+			amount = float64(v)
+		case int64:
+			amount = float64(v)
+		default:
+			log.Printf("Warning: transaction %d has invalid amount format", i)
+			continue
+		}
+
+		// Track minimum date
+		if minDate.IsZero() || txnDate.Before(minDate) {
+			minDate = txnDate
+		}
+
+		// Aggregate by day
+		dateKey := txnDate.Format("2006-01-02")
+		if _, exists := dayMap[dateKey]; !exists {
+			dayMap[dateKey] = &DayData{
+				Date:   txnDate,
+				Amount: 0,
+				Count:  0,
+			}
+		}
+		dayMap[dateKey].Amount += amount
+		dayMap[dateKey].Count++
+	}
+
+	if len(dayMap) == 0 {
+		return map[string]interface{}{
+			"error": "no valid transactions after parsing",
+		}
+	}
+
+	// Convert map to slice and sort by date
+	var dayDataSlice []DayData
+	for _, data := range dayMap {
+		dayDataSlice = append(dayDataSlice, *data)
+	}
+
+	sort.Slice(dayDataSlice, func(i, j int) bool {
+		return dayDataSlice[i].Date.Before(dayDataSlice[j].Date)
+	})
+
+	// Assign day numbers (1-indexed from first transaction)
+	for i := range dayDataSlice {
+		daysSinceStart := int(dayDataSlice[i].Date.Sub(minDate).Hours() / 24)
+		dayDataSlice[i].DayNumber = daysSinceStart + 1
+	}
+
+	// ========================================================================
+	// STEP 2: Prepare data for OLS regression
+	// ========================================================================
+	X := make([]float64, len(dayDataSlice))
+	y := make([]float64, len(dayDataSlice))
+
+	for i, data := range dayDataSlice {
+		X[i] = float64(data.DayNumber)
+		y[i] = data.Amount
+	}
+
+	// ========================================================================
+	// STEP 3: Fit OLS model
+	// ========================================================================
+	model := &OLSModel{}
+	err := model.Fit(X, y)
+	if err != nil {
+		return map[string]interface{}{
+			"error": fmt.Sprintf("failed to fit model: %v", err),
+		}
+	}
+
+	// ========================================================================
+	// STEP 4: Calculate model statistics
+	// ========================================================================
+	r2 := model.CalculateR2(X, y)
+	mse := model.CalculateMSE(X, y)
+	rmse := math.Sqrt(mse)
+
+	// Calculate trend
+	var trend string
+	if model.Weight > 0.01 {
+		trend = "increasing"
+	} else if model.Weight < -0.01 {
+		trend = "decreasing"
+	} else {
+		trend = "stable"
+	}
+
+	// ========================================================================
+	// STEP 5: Make future predictions
+	// ========================================================================
+	lastDayNumber := dayDataSlice[len(dayDataSlice)-1].DayNumber
+	lastDate := dayDataSlice[len(dayDataSlice)-1].Date
+
+	futurePredictions := make([]map[string]interface{}, days)
+	for i := 0; i < days; i++ {
+		futureDayNumber := lastDayNumber + i + 1
+		futureDate := lastDate.AddDate(0, 0, i+1)
+		predictedAmount := model.Predict(float64(futureDayNumber))
+
+		futurePredictions[i] = map[string]interface{}{
+			"day":              futureDayNumber,
+			"date":             futureDate.Format("2006-01-02"),
+			"predicted_amount": math.Round(predictedAmount*100) / 100, // Round to 2 decimals
+		}
+	}
+
+	// ========================================================================
+	// STEP 6: Calculate historical statistics
+	// ========================================================================
+	var totalAmount, totalCount float64
+	var minAmount, maxAmount float64
+	minAmount = y[0]
+	maxAmount = y[0]
+
+	for i, data := range dayDataSlice {
+		totalAmount += data.Amount
+		totalCount += float64(data.Count)
+
+		if y[i] < minAmount {
+			minAmount = y[i]
+		}
+		if y[i] > maxAmount {
+			maxAmount = y[i]
+		}
+	}
+
+	avgAmount := totalAmount / float64(len(dayDataSlice))
+	avgTransactionsPerDay := totalCount / float64(len(dayDataSlice))
+
+	// ========================================================================
+	// STEP 7: Format historical data
+	// ========================================================================
+	historicalData := make([]map[string]interface{}, len(dayDataSlice))
+	for i, data := range dayDataSlice {
+		predicted := model.Predict(float64(data.DayNumber))
+		residual := data.Amount - predicted
+
+		historicalData[i] = map[string]interface{}{
+			"day":               data.DayNumber,
+			"date":              data.Date.Format("2006-01-02"),
+			"actual_amount":     math.Round(data.Amount*100) / 100,
+			"predicted_amount":  math.Round(predicted*100) / 100,
+			"residual":          math.Round(residual*100) / 100,
+			"transaction_count": data.Count,
+		}
+	}
+
+	// ========================================================================
+	// STEP 8: Build response
+	// ========================================================================
+	result := map[string]interface{}{
+		"model": map[string]interface{}{
+			"equation":  fmt.Sprintf("y = %.2f + %.2fx", model.Bias, model.Weight),
+			"weight":    math.Round(model.Weight*100) / 100,
+			"bias":      math.Round(model.Bias*100) / 100,
+			"r_squared": math.Round(r2*10000) / 10000,
+			"mse":       math.Round(mse*100) / 100,
+			"rmse":      math.Round(rmse*100) / 100,
+		},
+		"insights": map[string]interface{}{
+			"trend":                    trend,
+			"total_days":               len(dayDataSlice),
+			"total_amount":             math.Round(totalAmount*100) / 100,
+			"total_transactions":       int(totalCount),
+			"avg_amount_per_day":       math.Round(avgAmount*100) / 100,
+			"avg_transactions_per_day": math.Round(avgTransactionsPerDay*100) / 100,
+			"min_daily_amount":         math.Round(minAmount*100) / 100,
+			"max_daily_amount":         math.Round(maxAmount*100) / 100,
+			"date_range": map[string]string{
+				"start": dayDataSlice[0].Date.Format("2006-01-02"),
+				"end":   dayDataSlice[len(dayDataSlice)-1].Date.Format("2006-01-02"),
+			},
+		},
+		"predictions":     futurePredictions,
+		"historical_data": historicalData,
+	}
+
+	return result
+}
 
 // ============================================================================
 // HACKATHON IDEAS
