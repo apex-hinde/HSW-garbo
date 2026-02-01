@@ -139,8 +139,7 @@ func main() {
 	srv.AddTools(createEmployeeTools(db)...)
 	log.Println("✅ Added employee management tools")
 
-	srv.AddTool(cashFlowAnalysisTool())
-	srv.AddTool(analyseCashFlow(transactions, days))
+	srv.AddTool(cashFlowAnalysisTool(liminalExecutor))
 	log.Println("✅ Added custom cash flow insight and projection tool")
 
 	// TODO: Add more custom tools here!
@@ -657,8 +656,88 @@ func listEmployeesByDepartmentTool(db *storage.DB) core.Tool {
 		Build()
 }
 
-func cashFlowAnalysisTool() core.Tool {
-	//Use analyseCashFlow somewhere
+func cashFlowAnalysisTool(liminalExecutor core.ToolExecutor) core.Tool {
+	return tools.New("analyze_cash_flow").
+		Description("Analyze cash flow patterns using OLS regression. Provides historical analysis, trend detection, and future predictions based on transaction data.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"days_to_predict": tools.IntegerProperty("Number of days to predict into the future (default: 7)"),
+		})).
+		Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+			// Parse input parameters
+			var params struct {
+				DaysToPredict int `json:"days_to_predict"`
+			}
+			if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+				return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+			}
+
+			// Default to 7 days if not specified
+			if params.DaysToPredict <= 0 {
+				params.DaysToPredict = 7
+			}
+
+			// Fetch transactions from Liminal API
+			txRequest := map[string]interface{}{
+				"limit": 100, // Get up to 100 transactions for analysis
+			}
+
+			txRequestJSON, _ := json.Marshal(txRequest)
+			txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+				UserID:    toolParams.UserID,
+				Tool:      "get_transactions",
+				Input:     txRequestJSON,
+				RequestID: toolParams.RequestID,
+			})
+			if err != nil {
+				return &core.ToolResult{
+					Success: false,
+					Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
+				}, nil
+			}
+			if !txResponse.Success {
+				return &core.ToolResult{
+					Success: false,
+					Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
+				}, nil
+			}
+
+			// Parse transactions
+			var transactions []map[string]interface{}
+			var txData map[string]interface{}
+			if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+				if txArray, ok := txData["transactions"].([]interface{}); ok {
+					for _, tx := range txArray {
+						if txMap, ok := tx.(map[string]interface{}); ok {
+							transactions = append(transactions, txMap)
+						}
+					}
+				}
+			}
+
+			if len(transactions) == 0 {
+				return &core.ToolResult{
+					Success: false,
+					Error:   "no transactions available for analysis",
+				}, nil
+			}
+
+			// Perform cash flow analysis
+			result := analyseCashFlow(transactions, params.DaysToPredict)
+
+			// Check for errors in analysis
+			if errMsg, hasError := result["error"].(string); hasError {
+				return &core.ToolResult{
+					Success: false,
+					Error:   errMsg,
+				}, nil
+			}
+
+			return &core.ToolResult{
+				Success: true,
+				Data:    result,
+			}, nil
+		}).
+		Build()
 }
 
 // OLSModel represents a simple linear regression model

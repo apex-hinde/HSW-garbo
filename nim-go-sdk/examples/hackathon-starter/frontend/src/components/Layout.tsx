@@ -24,6 +24,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/run" className={({ isActive }) => `topnav-link ${isActive ? 'active' : ''}`}>
               Commands
             </NavLink>
+            <NavLink to="/cash-flow" className={({ isActive }) => `topnav-link ${isActive ? 'active' : ''}`}>
+              Cash Flow
+            </NavLink>
           </nav>
         </div>
       </header>
