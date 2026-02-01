@@ -22,7 +22,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               Employees
             </NavLink>
             <NavLink to="/run" className={({ isActive }) => `topnav-link ${isActive ? 'active' : ''}`}>
-              Run Payroll
+              Commands
             </NavLink>
           </nav>
         </div>
