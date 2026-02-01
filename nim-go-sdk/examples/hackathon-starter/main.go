@@ -140,7 +140,9 @@ func main() {
 	log.Println("✅ Added employee management tools")
 
 	srv.AddTool(cashFlowAnalysisTool(liminalExecutor))
-	log.Println("✅ Added custom cash flow insight and projection tool")
+	srv.AddTool(predictBalanceTool(liminalExecutor))
+	srv.AddTool(getCashFlowInsights(liminalExecutor))
+	log.Println("✅ Added custom cash flow insight and projection tools")
 
 	// TODO: Add more custom tools here!
 	// Examples:
@@ -241,6 +243,11 @@ AVAILABLE BANKING TOOLS:
 
 CUSTOM ANALYTICAL TOOLS:
 - Analyze spending patterns (analyze_spending)
+
+CASH FLOW ANALYSIS TOOLS (powered by OLS regression):
+- Analyze cash flow trends (analyze_cash_flow) - detailed regression analysis with predictions
+- Predict future balance (predict_balance) - forecast account balance based on trends
+- Get cash flow insights (get_cash_flow_insights) - natural language insights and recommendations
 
 EMPLOYEE DIRECTORY TOOLS:
 - Add employee (create_employee)
@@ -738,6 +745,213 @@ func cashFlowAnalysisTool(liminalExecutor core.ToolExecutor) core.Tool {
 			}, nil
 		}).
 		Build()
+}
+
+// predictBalanceTool predicts future account balance based on cash flow trends
+func predictBalanceTool(liminalExecutor core.ToolExecutor) core.Tool {
+	return tools.New("predict_balance").
+		Description("Predict future account balance based on current cash flow trends. Uses OLS regression to forecast balance for a specified number of days ahead.").
+		Schema(tools.ObjectSchema(map[string]interface{}{
+			"days_ahead": tools.IntegerProperty("Number of days to predict ahead (default: 30)"),
+		})).
+		Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+			var params struct {
+				DaysAhead int `json:"days_ahead"`
+			}
+			if err := json.Unmarshal(toolParams.Input, &params); err != nil {
+				return &core.ToolResult{Success: false, Error: fmt.Sprintf("invalid input: %v", err)}, nil
+			}
+
+			if params.DaysAhead <= 0 {
+				params.DaysAhead = 30
+			}
+
+			// Get current balance
+			balanceResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+				UserID:    toolParams.UserID,
+				Tool:      "get_balance",
+				Input:     []byte("{}"),
+				RequestID: toolParams.RequestID,
+			})
+			if err != nil || !balanceResponse.Success {
+				return &core.ToolResult{
+					Success: false,
+					Error:   "failed to fetch current balance",
+				}, nil
+			}
+
+			var balanceData map[string]interface{}
+			json.Unmarshal(balanceResponse.Data, &balanceData)
+
+			currentBalance := 0.0
+			if balances, ok := balanceData["balances"].([]interface{}); ok && len(balances) > 0 {
+				if bal, ok := balances[0].(map[string]interface{}); ok {
+					if amount, ok := bal["amount"].(float64); ok {
+						currentBalance = amount
+					}
+				}
+			}
+
+			// Get cash flow analysis
+			txRequest := map[string]interface{}{"limit": 100}
+			txRequestJSON, _ := json.Marshal(txRequest)
+			txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+				UserID:    toolParams.UserID,
+				Tool:      "get_transactions",
+				Input:     txRequestJSON,
+				RequestID: toolParams.RequestID,
+			})
+			if err != nil || !txResponse.Success {
+				return &core.ToolResult{Success: false, Error: "failed to fetch transactions"}, nil
+			}
+
+			var transactions []map[string]interface{}
+			var txData map[string]interface{}
+			if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+				if txArray, ok := txData["transactions"].([]interface{}); ok {
+					for _, tx := range txArray {
+						if txMap, ok := tx.(map[string]interface{}); ok {
+							transactions = append(transactions, txMap)
+						}
+					}
+				}
+			}
+
+			if len(transactions) == 0 {
+				return &core.ToolResult{Success: false, Error: "no transactions available"}, nil
+			}
+
+			// Analyze cash flow to get trend
+			analysis := analyseCashFlow(transactions, params.DaysAhead)
+			if errMsg, hasError := analysis["error"].(string); hasError {
+				return &core.ToolResult{Success: false, Error: errMsg}, nil
+			}
+
+			// Extract model data
+			modelData, _ := analysis["model"].(map[string]interface{})
+			weight, _ := modelData["weight"].(float64)
+
+			// Calculate predicted balance change
+			// Daily trend * number of days
+			predictedChange := weight * float64(params.DaysAhead)
+			predictedBalance := currentBalance + predictedChange
+
+			result := map[string]interface{}{
+				"current_balance":   math.Round(currentBalance*100) / 100,
+				"predicted_balance": math.Round(predictedBalance*100) / 100,
+				"predicted_change":  math.Round(predictedChange*100) / 100,
+				"days_ahead":        params.DaysAhead,
+				"daily_trend":       math.Round(weight*100) / 100,
+				"trend_direction":   getTrendDirection(weight),
+			}
+
+			return &core.ToolResult{Success: true, Data: result}, nil
+		}).
+		Build()
+}
+
+// getCashFlowInsights provides natural language insights about cash flow
+func getCashFlowInsights(liminalExecutor core.ToolExecutor) core.Tool {
+	return tools.New("get_cash_flow_insights").
+		Description("Get natural language insights about cash flow patterns, trends, and recommendations based on regression analysis.").
+		Schema(tools.ObjectSchema(map[string]interface{}{})).
+		Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+			// Get transactions
+			txRequest := map[string]interface{}{"limit": 100}
+			txRequestJSON, _ := json.Marshal(txRequest)
+			txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+				UserID:    toolParams.UserID,
+				Tool:      "get_transactions",
+				Input:     txRequestJSON,
+				RequestID: toolParams.RequestID,
+			})
+			if err != nil || !txResponse.Success {
+				return &core.ToolResult{Success: false, Error: "failed to fetch transactions"}, nil
+			}
+
+			var transactions []map[string]interface{}
+			var txData map[string]interface{}
+			if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+				if txArray, ok := txData["transactions"].([]interface{}); ok {
+					for _, tx := range txArray {
+						if txMap, ok := tx.(map[string]interface{}); ok {
+							transactions = append(transactions, txMap)
+						}
+					}
+				}
+			}
+
+			if len(transactions) == 0 {
+				return &core.ToolResult{Success: false, Error: "no transactions available"}, nil
+			}
+
+			// Analyze cash flow
+			analysis := analyseCashFlow(transactions, 30)
+			if errMsg, hasError := analysis["error"].(string); hasError {
+				return &core.ToolResult{Success: false, Error: errMsg}, nil
+			}
+
+			insights, _ := analysis["insights"].(map[string]interface{})
+			modelData, _ := analysis["model"].(map[string]interface{})
+
+			trend, _ := insights["trend"].(string)
+			avgPerDay, _ := insights["avg_amount_per_day"].(float64)
+			totalAmount, _ := insights["total_amount"].(float64)
+			weight, _ := modelData["weight"].(float64)
+			rSquared, _ := modelData["r_squared"].(float64)
+
+			// Generate insights
+			insightsList := []string{}
+
+			// Trend insight
+			if trend == "increasing" {
+				insightsList = append(insightsList, fmt.Sprintf("Your cash flow is trending upward with an average increase of $%.2f per day.", weight))
+			} else if trend == "decreasing" {
+				insightsList = append(insightsList, fmt.Sprintf("Your cash flow is trending downward with an average decrease of $%.2f per day.", math.Abs(weight)))
+			} else {
+				insightsList = append(insightsList, "Your cash flow is relatively stable with minimal daily variation.")
+			}
+
+			// Model accuracy insight
+			if rSquared > 0.8 {
+				insightsList = append(insightsList, "Your spending patterns are highly predictable (R² > 0.8), making forecasts very reliable.")
+			} else if rSquared > 0.5 {
+				insightsList = append(insightsList, "Your spending patterns show moderate predictability (R² > 0.5).")
+			} else {
+				insightsList = append(insightsList, "Your spending patterns are quite variable, making long-term predictions less certain.")
+			}
+
+			// Average spending insight
+			insightsList = append(insightsList, fmt.Sprintf("You average $%.2f in daily transactions.", math.Abs(avgPerDay)))
+
+			// Recommendation based on trend
+			if trend == "decreasing" && weight < -10 {
+				insightsList = append(insightsList, "⚠️ Warning: Your balance is declining rapidly. Consider reviewing expenses or increasing income.")
+			} else if trend == "increasing" && weight > 10 {
+				insightsList = append(insightsList, "✅ Great! Your balance is growing steadily. Consider moving excess funds to savings.")
+			}
+
+			result := map[string]interface{}{
+				"insights":       insightsList,
+				"trend":          trend,
+				"daily_change":   math.Round(weight*100) / 100,
+				"predictability": rSquared,
+				"total_analyzed": totalAmount,
+			}
+
+			return &core.ToolResult{Success: true, Data: result}, nil
+		}).
+		Build()
+}
+
+// Helper functions
+func getTrendDirection(weight float64) string {
+	if weight > 0.01 {
+		return "increasing"
+	} else if weight < -0.01 {
+		return "decreasing"
+	}
+	return "stable"
 }
 
 // OLSModel represents a simple linear regression model

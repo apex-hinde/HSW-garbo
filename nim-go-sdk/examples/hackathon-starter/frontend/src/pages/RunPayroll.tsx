@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 type Category =
   | 'Banking & Wallet'
   | 'Savings & Investment'
+  | 'Cash Flow Analysis'
   | 'Employee Directory'
   | 'Payroll Management'
   | 'Key Features'
@@ -79,6 +80,29 @@ const COMMANDS: Command[] = [
     description: 'Take money out of savings.',
     requiresConfirmation: true,
     notes: 'Requires confirmation before execution.',
+  },
+
+  // 📊 Cash Flow Analysis Tools
+  {
+    id: 'analyze_cash_flow',
+    category: 'Cash Flow Analysis',
+    name: 'analyze_cash_flow',
+    description: 'Perform detailed OLS regression analysis on transaction history. Get trends, predictions, and model statistics.',
+    notes: 'Analyzes up to 100 recent transactions. Specify days_to_predict (default: 7).',
+  },
+  {
+    id: 'predict_balance',
+    category: 'Cash Flow Analysis',
+    name: 'predict_balance',
+    description: 'Predict future account balance based on current cash flow trends.',
+    notes: 'Uses regression model to forecast balance. Specify days_ahead (default: 30).',
+  },
+  {
+    id: 'get_cash_flow_insights',
+    category: 'Cash Flow Analysis',
+    name: 'get_cash_flow_insights',
+    description: 'Get natural language insights and recommendations about spending patterns.',
+    notes: 'Provides actionable insights based on trend analysis and model accuracy.',
   },
 
   // 👥 Employee Directory Tools
@@ -192,6 +216,7 @@ export default function RunPayroll() {
     const order: Category[] = [
       'Banking & Wallet',
       'Savings & Investment',
+      'Cash Flow Analysis',
       'Employee Directory',
       'Payroll Management',
     ]
