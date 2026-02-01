@@ -15,7 +15,6 @@ import (
 	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
 	"github.com/becomeliminal/nim-go-sdk/core"
 	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/api"
-	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
 	"github.com/becomeliminal/nim-go-sdk/executor"
 	"github.com/becomeliminal/nim-go-sdk/server"
 	"github.com/becomeliminal/nim-go-sdk/tools"
@@ -53,19 +52,8 @@ func main() {
 	}
 
 	
-	db, e := storage.NewDB("db")
-	if e != nil{
-		log.Fatal(e)
-	}
-//	alex := storage.Employee{
-//		ID: 0,
-//		FirstName: "Alex",
-//		LastName: "Hinde",
-//		Recipient: "apex",
-//		Wage: 100,
-//		Department: "Finance",
-//		}
-//	(db).CreateEmployee(&alex)
+
+
 	// ============================================================================
 	// LIMINAL EXECUTOR SETUP
 	// ============================================================================
@@ -92,6 +80,15 @@ func main() {
 			log.Printf("⚠️ Failed to close employee database: %v", err)
 		}
 	}()
+//	alex := storage.Employee{
+//		ID: 0,
+//		FirstName: "Alex",
+//		LastName: "Hinde",
+//		Recipient: "apex",
+//		Wage: 100,
+//		Department: "Finance",
+//		}
+//	(db).CreateEmployee(&alex)
 	log.Println("✅ Employee database configured")
 
 	// ============================================================================
@@ -300,13 +297,50 @@ func doPayRoll(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
 	return tools.New("do_payroll").
 	Description("does the payroll for all employees").
 	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
-		peopleWhoNeedToBePaid := isPayRollDone(liminalExecutor , db ) 
+	txRequest := map[string]interface{}{
+		"limit": 100, // Get up to 100 transactions
+	}
+
+	txRequestJSON, _ := json.Marshal(txRequest)
+	txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+		UserID:    toolParams.UserID,
+		Tool:      "get_transactions",
+		Input:     txRequestJSON,
+		RequestID: toolParams.RequestID,
+	})
+	if err != nil {
+		return &core.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
+		}, nil
+	}
+	if !txResponse.Success {
+		return &core.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
+		}, nil
+	}
+	var transactions []map[string]interface{}
+	var txData map[string]interface{}
+	if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+		if txArray, ok := txData["transactions"].([]interface{}); ok {
+			for _, tx := range txArray {
+				if txMap, ok := tx.(map[string]interface{}); ok {
+					transactions = append(transactions, txMap)
+				}
+			}
+		}
+	}
+	newTransactions := removeOld(transactions)
+	peopleWhoNeedToBePaid := checkPayments(newTransactions, db)
+
+
 
 	L, e := (db).ListEmployees()
 	if e != nil {
 		log.Fatal()
 	}
-	
+	paymentRequests := []map[string]interface{}{}
 	for _, v := range L{
 		if slices.Contains(peopleWhoNeedToBePaid, v.Recipient) {
  
@@ -316,7 +350,17 @@ func doPayRoll(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
 			"currency": "USD",
 			"note": v.Recipient + "payroll",
 		}
+		paymentRequests = append(paymentRequests, payRequest)
+
 	}
+	}
+	result := paymentRequests[0]
+	log.Println(result)
+
+	return &core.ToolResult{
+		Success: true,
+		Data: result,
+	}, nil
 	}).Build()
 }
 func isPayRollDone(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
@@ -367,9 +411,8 @@ func isPayRollDone(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
 		Success: true,
 		Data: result,
 	}, nil
-
+		
 	}).Build()
-
 
 }
 func removeOld(transactions []map[string]interface{}) []map[string]interface{} {
