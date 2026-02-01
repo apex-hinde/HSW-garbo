@@ -147,6 +147,10 @@ func main() {
 	srv.AddTools(createEmployeeTools(db)...)
 	log.Println("✅ Added employee management tools")
 
+	srv.AddTool(cashFlowAnalysisTool())
+	srv.AddTool(analyseCashFlow(transactions, days))
+	log.Println("✅ Added custom cash flow insight and projection tool")
+
 	// TODO: Add more custom tools here!
 	// Examples:
 	//   - Savings goal tracker
@@ -661,10 +665,21 @@ func listEmployeesByDepartmentTool(db *storage.DB) core.Tool {
 		Build()
 }
 
+func cashFlowAnalysisTool() core.Tool {
+	//Use analyseCashFlow somewhere
+}
+
 // OLSModel represents a simple linear regression model
 type OLSModel struct {
 	Weight float64
 	Bias   float64
+}
+
+type DayData struct {
+	DayNumber int
+	Date      time.Time
+	Amount    float64
+	Count     int
 }
 
 // Fit trains the model using analytical OLS solution
@@ -754,8 +769,81 @@ func (m *OLSModel) CalculateMSE(X, y []float64) float64 {
 	return sumSquaredError / float64(len(y))
 }
 
-// analyseTransactions processes transaction data and returns insights
-func analyseTransactions(transactions []map[string]interface{}, days int) map[string]interface{} {
+// Split regressions every 30 days, to display variation in trends over the course of months
+func MonthSlicer(days []DayData, income []float64) []OLSModel {
+	if len(days) == 0 {
+		return []OLSModel{}
+	}
+
+	window := 30
+	regs := make([]OLSModel, 0, len(days)/window+1)
+
+	// start represents the earliest day selected, or of the 30-day window
+	// as such, it increments by the window size (+30)
+	for start := 0; start < len(days); start += window {
+		end := start + window
+		if end > len(days) {
+			end = len(days)
+		}
+
+		// Build X and y for this window
+		size := end - start
+		X := make([]float64, size)
+		y := make([]float64, size)
+
+		for i := 0; i < size; i++ {
+			X[i] = float64(days[start+i].DayNumber)
+			y[i] = income[start+i]
+		}
+
+		// Create an OLS regression for this time frame
+		model := OLSModel{}
+		err := model.Fit(X, y)
+		if err == nil {
+			regs = append(regs, model)
+		}
+	}
+
+	return regs
+}
+
+// Takes an array of OLS regressions and calculates a weighted average of the weights, and normal average of the bias to project fo the next 30 days
+func ProjectCashFlow(regs []OLSModel, weighted bool) OLSModel {
+	if len(regs) == 1 {
+		return regs[0]
+	}
+
+	var sumW float64
+	var sumB float64
+	var sumWeights float64
+
+	for i := 0; i < len(regs); i++ {
+		w := regs[i].Weight
+		b := regs[i].Bias
+
+		if weighted {
+			// weight factor increases with the recency of the time slice
+			factor := float64(1+i) / float64(len(regs))
+			sumW += w * factor
+			sumWeights += factor
+		} else {
+			sumW += w
+			sumWeights += 1
+		}
+
+		sumB += b
+	}
+
+	avgW := sumW / sumWeights
+	avgB := sumB / float64(len(regs))
+
+	projection := OLSModel{Weight: avgW, Bias: avgB}
+
+	return projection
+}
+
+// analyseCashFlow processes transaction data and returns insights
+func analyseCashFlow(transactions []map[string]interface{}, days int) map[string]interface{} {
 	// Handle edge cases
 	if len(transactions) == 0 {
 		return map[string]interface{}{
@@ -770,12 +858,6 @@ func analyseTransactions(transactions []map[string]interface{}, days int) map[st
 	// ========================================================================
 	// STEP 1: Parse and aggregate transaction data by day
 	// ========================================================================
-	type DayData struct {
-		DayNumber int
-		Date      time.Time
-		Amount    float64
-		Count     int
-	}
 
 	dayMap := make(map[string]*DayData)
 	var minDate time.Time
