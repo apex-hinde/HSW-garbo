@@ -247,7 +247,7 @@ export default function Dashboard() {
   if (employeesQuery.isLoading) return <p>Loading dashboard…</p>
   if (employeesQuery.error) return <p className="error">Failed: {employeesQuery.error.message}</p>
 
-  const pieColors = ['#ff7a00', '#ffb266', '#ffd7b0', '#ff9b33', '#ff8a1a', '#ffa858']
+  const pieColors = ['#ff7a00', '#1d6e00', '#000000', '#7c0059', '#8c0200', '#000d80', '#00a2a7']
 
   return (
     <div className="dash">
@@ -284,36 +284,6 @@ export default function Dashboard() {
       </section>
 
       <section className="card">
-        <h2 className="section-title">Average wage by department</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <BarChart data={analytics.avgByDept}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="department" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="avg" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2 className="section-title">Headcount by department</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <BarChart data={analytics.headcountByDept}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="department" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="headcount" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="card">
         <h2 className="section-title">Share of payroll by department</h2>
         <div className="chart">
           <ResponsiveContainer>
@@ -329,22 +299,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Wage distribution */}
-      <section className="card">
-        <h2 className="section-title">Wage distribution (histogram)</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <BarChart data={analytics.hist}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 12 }} interval={0} />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="count" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
       <section className="card">
         <h2 className="section-title">Wage percentile curve</h2>
         <div className="chart">
@@ -356,24 +310,6 @@ export default function Dashboard() {
               <Tooltip />
               <Line type="monotone" dataKey="wage" dot={false} />
             </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* Concentration */}
-      <section className="card">
-        <h2 className="section-title">Top 10 vs rest of payroll</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <BarChart data={analytics.topVsRest}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="top" stackId="a" name="Top 10 total" />
-              <Bar dataKey="rest" stackId="a" name="Rest total" />
-            </BarChart>
           </ResponsiveContainer>
         </div>
       </section>
@@ -412,21 +348,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="card">
-        <h2 className="section-title">Top wage per department</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <BarChart data={analytics.deptTop}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="department" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="topWage" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
       {/* Scatter/outliers */}
       <section className="card">
         <h2 className="section-title">Wages by department (outlier view)</h2>
@@ -441,58 +362,6 @@ export default function Dashboard() {
             </ScatterChart>
           </ResponsiveContainer>
         </div>
-      </section>
-
-      {/* Data quality */}
-      <section className="card">
-        <h2 className="section-title">Recipient coverage</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <PieChart>
-              <Tooltip />
-              <Pie data={analytics.recipientCoverage} dataKey="value" nameKey="name" outerRadius={90}>
-                {analytics.recipientCoverage.map((_, i) => (
-                  <Cell key={i} fill={pieColors[i % pieColors.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2 className="section-title">Wage validity</h2>
-        <div className="chart">
-          <ResponsiveContainer>
-            <PieChart>
-              <Tooltip />
-              <Pie data={analytics.wageValidity} dataKey="value" nameKey="name" outerRadius={90}>
-                {analytics.wageValidity.map((_, i) => (
-                  <Cell key={i} fill={pieColors[(i + 2) % pieColors.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2 className="section-title">Duplicate recipients (potential payout risk)</h2>
-        {analytics.duplicateRecipients.length === 0 ? (
-          <p className="muted">No duplicate recipients found.</p>
-        ) : (
-          <div className="chart">
-            <ResponsiveContainer>
-              <BarChart data={analytics.duplicateRecipients}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="recipient" tick={{ fontSize: 11 }} interval={0} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
       </section>
 
       {/* “Box plot” substitute table (per dept quantiles) */}
