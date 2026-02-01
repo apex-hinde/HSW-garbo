@@ -163,9 +163,7 @@ export default function CashFlow() {
                             <XAxis
                                 dataKey="date"
                                 tick={{ fontSize: 11 }}
-                                angle={-45}
-                                textAnchor="end"
-                                height={80}
+                                interval={Math.floor(historical_data.length / 6)}
                             />
                             <YAxis
                                 label={{ value: 'Amount ($)', angle: -90, position: 'insideLeft' }}
