@@ -10,7 +10,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="app">
       <header className="topnav">
         <div className="topnav-inner">
-          {/* Brand (icon + "liminal payroll") links to Dashboard */}
+          {/* Brand (icon + "liminal payroll and analytics") links to Dashboard */}
           <Link to="/" className="brandlink" aria-label="Go to dashboard">
             <img className="brandicon" src="/liminal-mark.svg" alt="" />
             <span className="brandtext">liminal payroll</span>
