@@ -1,4 +1,4 @@
-# HSW-garbo — Liminal Payroll Manager
+# HSW-garbo — Liminal Payroll and Analytics Manager
 
 A hackathon project built on the **Liminal / Nim Go SDK hackathon starter**.  
 This app helps companies manage an employee directory and run payroll using Liminal’s wallet, savings, and payroll tools (with **confirmation required** for any money movement).
