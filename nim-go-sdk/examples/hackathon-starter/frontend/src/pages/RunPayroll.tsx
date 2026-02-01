@@ -237,28 +237,6 @@ export default function RunPayroll() {
         </div>
       </section>
 
-      <section className="card">
-        <h2 className="section-title">Key Features</h2>
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          {FEATURES.map((f) => (
-            <div
-              key={f.title}
-              style={{
-                padding: 14,
-                borderRadius: 16,
-                border: '1px solid rgba(18,18,18,0.10)',
-                background: 'rgba(18,18,18,0.02)',
-              }}
-            >
-              <div style={{ fontWeight: 900 }}>{f.title}</div>
-              <div className="muted" style={{ marginTop: 6 }}>
-                {f.body}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {grouped.map((group) => (
         <section key={group.category} className="card">
           <h2 className="section-title">{group.category}</h2>
