@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"time"
-
+	"strings"
+	"slices"
+	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
 	"github.com/becomeliminal/nim-go-sdk/core"
 	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/api"
 	"github.com/becomeliminal/nim-go-sdk/examples/hackathon-starter/internal/storage"
@@ -50,6 +52,20 @@ func main() {
 		employeesDBPath = "employees.db"
 	}
 
+	
+	db, e := storage.NewDB("db")
+	if e != nil{
+		log.Fatal(e)
+	}
+//	alex := storage.Employee{
+//		ID: 0,
+//		FirstName: "Alex",
+//		LastName: "Hinde",
+//		Recipient: "apex",
+//		Wage: 100,
+//		Department: "Finance",
+//		}
+//	(db).CreateEmployee(&alex)
 	// ============================================================================
 	// LIMINAL EXECUTOR SETUP
 	// ============================================================================
@@ -124,7 +140,9 @@ func main() {
 	// This is where you'll add your hackathon project's custom tools!
 	// Below is an example spending analyzer tool to get you started.
 
-	srv.AddTool(createSpendingAnalyzerTool(liminalExecutor))
+	srv.AddTool(countEmployeeCount(liminalExecutor, *db))
+	srv.AddTool(isPayRollDone(liminalExecutor, *db))
+
 	log.Println("✅ Added custom spending analyzer tool")
 
 	// Employee management tools (CRUD + department lookup)
@@ -258,6 +276,144 @@ Remember: You're here to make banking delightful and help users build better fin
 // 4. Return useful insights
 //
 // Use this as a template for your own hackathon tools!
+func countEmployeeCount(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
+	return tools.New("count_employees").
+	Description("counts the total number of employees").
+	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+	L, e := (db).ListEmployees()
+	if e != nil {
+		log.Fatal()
+	}
+	
+	result := map[string]interface{}{
+		"employee count": len(L),
+	}
+
+	return &core.ToolResult{
+		Success: true,
+		Data:    result,
+	}, nil	
+	}).
+	Build()
+}
+func doPayRoll(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
+	return tools.New("do_payroll").
+	Description("does the payroll for all employees").
+	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+		peopleWhoNeedToBePaid := isPayRollDone(liminalExecutor , db ) 
+
+	L, e := (db).ListEmployees()
+	if e != nil {
+		log.Fatal()
+	}
+	
+	for _, v := range L{
+		if slices.Contains(peopleWhoNeedToBePaid, v.Recipient) {
+ 
+		payRequest := map[string]interface{}{
+			"recipient": v.Recipient,
+			"amount": v.Wage,
+			"currency": "USD",
+			"note": v.Recipient + "payroll",
+		}
+	}
+	}).Build()
+}
+func isPayRollDone(liminalExecutor core.ToolExecutor, db storage.DB) core.Tool {
+	return tools.New("payroll_check").
+	Description("checks if all payroll is done").
+	Handler(func(ctx context.Context, toolParams *core.ToolParams) (*core.ToolResult, error) {
+
+	txRequest := map[string]interface{}{
+		"limit": 100, // Get up to 100 transactions
+	}
+
+	txRequestJSON, _ := json.Marshal(txRequest)
+	txResponse, err := liminalExecutor.Execute(ctx, &core.ExecuteRequest{
+		UserID:    toolParams.UserID,
+		Tool:      "get_transactions",
+		Input:     txRequestJSON,
+		RequestID: toolParams.RequestID,
+	})
+	if err != nil {
+		return &core.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("failed to fetch transactions: %v", err),
+		}, nil
+	}
+	if !txResponse.Success {
+		return &core.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("transaction fetch failed: %s", txResponse.Error),
+		}, nil
+	}
+	var transactions []map[string]interface{}
+	var txData map[string]interface{}
+	if err := json.Unmarshal(txResponse.Data, &txData); err == nil {
+		if txArray, ok := txData["transactions"].([]interface{}); ok {
+			for _, tx := range txArray {
+				if txMap, ok := tx.(map[string]interface{}); ok {
+					transactions = append(transactions, txMap)
+				}
+			}
+		}
+	}
+	newTransactions := removeOld(transactions)
+	answer := checkPayments(newTransactions, db)
+	result := map[string]interface{}{
+		"people who have not been paid": answer,
+	}
+	return &core.ToolResult{
+		Success: true,
+		Data: result,
+	}, nil
+
+	}).Build()
+
+
+}
+func removeOld(transactions []map[string]interface{}) []map[string]interface{} {
+	var newTransactions []map[string]interface{}
+	for _, v := range transactions{
+		log.Println(v["createdAt"])
+		var timeString string = v["createdAt"].(string)
+		var time, e = time.Parse(time.RFC3339, timeString)
+		if e != nil {
+			log.Println("time not formated correctly")
+		}
+		if (time).Before(time.Local().AddDate(0,0,-14)) {
+			newTransactions = append(newTransactions, v)
+		}
+
+	}
+	return newTransactions
+}
+
+func checkPayments(transactions []map[string]interface{}, db storage.DB) []string{
+	var acc []string
+	var notes []string
+	for _, v := range transactions{
+		var note string = v["note"].(string)
+		words := strings.Fields(note)
+
+		var word string = words[0]
+		notes = append(notes, word)
+	}
+
+	L, e := db.ListEmployees()
+	if e != nil {
+		log.Fatal()
+	}
+	for _, valueFromDb := range L{
+
+		var recipient string = valueFromDb.Recipient
+		if !slices.Contains(notes, recipient) {
+			acc = append(acc, recipient)
+		}
+
+	}
+	return acc
+}
 
 func createSpendingAnalyzerTool(liminalExecutor core.ToolExecutor) core.Tool {
 	return tools.New("analyze_spending").
