@@ -1,9 +1,10 @@
 export type Employee = {
-  id: string
-  name: string
-  liminalUser: string // e.g. "@alice" or a userId
-  salary: string      // keep as string to avoid float issues
-  currency: string    // "USD" | "EUR" | "LIL" ...
+  id: number
+  firstName: string
+  lastName: string
+  recipient: string
+  wage: number
+  department: string
 }
 
 export type PayrollRun = {
@@ -18,7 +19,7 @@ export type PayrollRun = {
 export type CreatePayrollRunRequest = {
   periodStart: string
   periodEnd: string
-  employeeIds: string[]
+  employeeIds: number[]
 }
 
 export type ExecutePayrollRunResponse = {

@@ -17,7 +17,7 @@ export default function RunPayroll() {
   const [periodEnd, setPeriodEnd] = useState('')
 
   const selectedIds = useMemo(
-    () => Object.entries(selected).filter(([, v]) => v).map(([k]) => k),
+    () => Object.entries(selected).filter(([, v]) => v).map(([k]) => Number(k)),
     [selected]
   )
 
@@ -59,7 +59,7 @@ export default function RunPayroll() {
                   onChange={(ev) => setSelected((s) => ({ ...s, [emp.id]: ev.target.checked }))}
                 />
                 <span>
-                  <strong>{emp.name}</strong> — {emp.salary} {emp.currency} — {emp.liminalUser}
+                  <strong>{emp.firstName} {emp.lastName}</strong> — {emp.wage} — {emp.recipient} ({emp.department})
                 </span>
               </label>
             ))}

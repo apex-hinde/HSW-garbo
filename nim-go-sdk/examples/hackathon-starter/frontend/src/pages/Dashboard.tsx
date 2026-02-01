@@ -18,57 +18,37 @@ import {
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { listEmployees } from '../api/employees'
-
-// Adjust this type if your backend uses different field names
-type Employee = {
-  id?: string
-  first_name: string
-  last_name: string
-  recipient: string
-  wage: string | number
-  department: string
-}
-
-function parseWage(w: Employee['wage']): number {
-  if (typeof w === 'number') return w
-  // allow "$2,500.00" etc
-  const cleaned = String(w).replace(/[^0-9.-]/g, '')
-  const n = Number(cleaned)
-  return Number.isFinite(n) ? n : NaN
-}
+import type { Employee } from '../types/payroll'
 
 function quantile(sorted: number[], q: number): number {
   if (sorted.length === 0) return NaN
-  const pos = (sorted.length - 1) * q
+  const sortedArr = [...sorted].sort((a, b) => a - b)
+  const pos = (sortedArr.length - 1) * q
   const base = Math.floor(pos)
   const rest = pos - base
-  if (sorted[base + 1] === undefined) return sorted[base]
-  return sorted[base] + rest * (sorted[base + 1] - sorted[base])
+  if (sortedArr[base + 1] === undefined) return sortedArr[base]
+  return sortedArr[base] + rest * (sortedArr[base + 1] - sortedArr[base])
 }
 
 export default function Dashboard() {
   const employeesQuery = useQuery<Employee[], Error>({
-  queryKey: ['employees-mock'],
-  queryFn: async () => {
-    const res = await fetch('/mock-employees.json')
-    if (!res.ok) throw new Error('Failed to load mock-employees.json')
-    return res.json()
-  },
-})
+    queryKey: ['employees'],
+    queryFn: listEmployees,
+  })
 
   const analytics = useMemo(() => {
     const emps = employeesQuery.data ?? []
 
     const rows = emps.map((e, idx) => {
-      const wageNum = parseWage(e.wage)
+      const wageNum = e.wage
       return {
-        key: e.id ?? `${e.recipient ?? 'emp'}-${idx}`,
-        name: `${e.first_name} ${e.last_name}`.trim(),
+        key: e.id ? String(e.id) : `${e.recipient ?? 'emp'}-${idx}`,
+        name: `${e.firstName} ${e.lastName}`.trim(),
         recipient: e.recipient?.trim() ?? '',
         department: (e.department?.trim() || 'Unassigned') as string,
         wage: wageNum,
         wageRaw: e.wage,
-        wageValid: Number.isFinite(wageNum) && wageNum > 0,
+        wageValid: wageNum > 0,
       }
     })
 

@@ -7,12 +7,12 @@ import (
 
 // Employee represents an employee record in the database
 type Employee struct {
-	ID         int     `db:"id"`
-	FirstName  string  `db:"first_name"`
-	LastName   string  `db:"last_name"`
-	Recipient  string  `db:"recipient"`
-	Wage       float64 `db:"wage"`
-	Department string  `db:"department"`
+	ID         int     `db:"id" json:"id"`
+	FirstName  string  `db:"first_name" json:"firstName"`
+	LastName   string  `db:"last_name" json:"lastName"`
+	Recipient  string  `db:"recipient" json:"recipient"`
+	Wage       float64 `db:"wage" json:"wage"`
+	Department string  `db:"department" json:"department"`
 }
 
 // Validate checks if an Employee has valid field values
