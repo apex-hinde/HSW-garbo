@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Employee } from '../types/payroll'
 import { listEmployees, createEmployee, deleteEmployee } from '../api/employees'
 
-const empty: Omit<Employee, 'id'> = { name: '', liminalUser: '', salary: '', currency: 'USD' }
+const empty: Omit<Employee, 'id'> = { firstName: '', lastName: '', recipient: '', wage: 0, department: '' }
 
 export default function Employees() {
   const qc = useQueryClient()
@@ -22,17 +22,18 @@ export default function Employees() {
     },
   })
 
-  const delMut = useMutation<{ success: boolean }, Error, string>({
+  const delMut = useMutation<{ success: boolean }, Error, number>({
     mutationFn: deleteEmployee,
     onSuccess: async () => qc.invalidateQueries({ queryKey: ['employees'] }),
   })
 
   const canSubmit = useMemo(() => {
     return (
-      form.name.trim().length > 0 &&
-      form.liminalUser.trim().length > 0 &&
-      form.salary.trim().length > 0 &&
-      form.currency.trim().length > 0
+      form.firstName.trim().length > 0 &&
+      form.lastName.trim().length > 0 &&
+      form.recipient.trim().length > 0 &&
+      form.wage > 0 &&
+      form.department.trim().length > 0
     )
   }, [form])
 
@@ -43,28 +44,31 @@ export default function Employees() {
 
         <div className="form-row">
           <input
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="First Name"
+            value={form.firstName}
+            onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
           />
           <input
-            placeholder="Liminal user (e.g. @alice)"
-            value={form.liminalUser}
-            onChange={(e) => setForm((f) => ({ ...f, liminalUser: e.target.value }))}
+            placeholder="Last Name"
+            value={form.lastName}
+            onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
           />
           <input
-            placeholder="Salary (e.g. 2500.00)"
-            value={form.salary}
-            onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
+            placeholder="Recipient (e.g. @alice)"
+            value={form.recipient}
+            onChange={(e) => setForm((f) => ({ ...f, recipient: e.target.value }))}
           />
-          <select
-            value={form.currency}
-            onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-          >
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="LIL">LIL</option>
-          </select>
+          <input
+            placeholder="Wage"
+            type="number"
+            value={form.wage || ''}
+            onChange={(e) => setForm((f) => ({ ...f, wage: parseFloat(e.target.value) || 0 }))}
+          />
+          <input
+            placeholder="Department"
+            value={form.department}
+            onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+          />
 
           <button disabled={!canSubmit || createMut.isPending} onClick={() => createMut.mutate(form)}>
             {createMut.isPending ? 'Adding...' : 'Add'}
@@ -86,19 +90,19 @@ export default function Employees() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Liminal</th>
-                <th>Salary</th>
-                <th>Currency</th>
+                <th>Recipient</th>
+                <th>Wage</th>
+                <th>Department</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {employees.data.map((emp: Employee) => (
                 <tr key={emp.id}>
-                  <td>{emp.name}</td>
-                  <td>{emp.liminalUser}</td>
-                  <td>{emp.salary}</td>
-                  <td>{emp.currency}</td>
+                  <td>{emp.firstName} {emp.lastName}</td>
+                  <td>{emp.recipient}</td>
+                  <td>{emp.wage}</td>
+                  <td>{emp.department}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button className="danger" disabled={delMut.isPending} onClick={() => delMut.mutate(emp.id)}>
                       Remove
@@ -110,9 +114,7 @@ export default function Employees() {
           </table>
         )}
 
-        <p className="hint">
-          Next step: add Edit → call <code>PUT /api/employees/:id</code>
-        </p>
+
       </section>
     </div>
   )

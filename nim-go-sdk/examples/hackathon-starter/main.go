@@ -80,15 +80,7 @@ func main() {
 			log.Printf("⚠️ Failed to close employee database: %v", err)
 		}
 	}()
-	aria72 := storage.Employee{
-		ID:         0,
-		FirstName:  "Aria",
-		LastName:   "Hinde",
-		Recipient:  "aria72",
-		Wage:       1,
-		Department: "Finance",
-	}
-	(db).CreateEmployee(&aria72)
+
 	log.Println("✅ Employee database configured")
 
 	// ============================================================================
